@@ -1,6 +1,14 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, field_validator
 from datetime import datetime
+from auth import (
+    fake_users_db,
+    verify_password,
+    get_password_hash,
+    create_access_token,
+    get_current_user,
+)
+from pydantic import BaseModel, field_validator, EmailStr
 
 # Импорт твоей ML-функции
 from ml.forecast import forecast_ticker
@@ -37,6 +45,39 @@ class PredictionRecord(BaseModel):
 
 
 # ---- Приложение ----
+
+class UserRegister(BaseModel):
+    email: str
+    username: str
+    password: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str):
+        v = (v or "").strip()
+        if not v or "@" not in v:
+            raise ValueError("Некорректный email")
+        return v
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str):
+        v = (v or "").strip()
+        if len(v) < 3:
+            raise ValueError("Имя пользователя должно быть не менее 3 символов")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str):
+        if len(v) < 4:
+            raise ValueError("Пароль должен быть не менее 4 символов")
+        return v
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
 
 app = FastAPI(
     title="PredictForFSt API",
@@ -75,6 +116,39 @@ def post_forecast(req: ForecastRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+
+# ---- Авторизация ----
+
+@app.post("/auth/register", status_code=201)
+def register(user: UserRegister):
+    """Регистрация нового пользователя."""
+    if user.username in fake_users_db:
+        raise HTTPException(status_code=409, detail="Пользователь уже существует")
+    
+    fake_users_db[user.username] = {
+        "username": user.username,
+        "email": user.email,
+        "hashed_password": get_password_hash(user.password),
+    }
+    return {"message": "Пользователь создан", "username": user.username}
+
+
+@app.post("/auth/login")
+def login(user: UserLogin):
+    """Вход в систему — получение JWT токена."""
+    db_user = fake_users_db.get(user.username)
+    if not db_user or not verify_password(user.password, db_user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+    
+    token = create_access_token(data={"sub": user.username})
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@app.get("/auth/me")
+def get_me(current_user: dict = Depends(get_current_user)):
+    """Информация о текущем пользователе."""
+    return {"username": current_user["username"], "email": current_user["email"]}
 
 
 # ---- CRUD для сохранения прогнозов ----
