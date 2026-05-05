@@ -9,9 +9,8 @@ from auth import (
     create_access_token,
     get_current_user,
 )
-from pydantic import BaseModel, field_validator, EmailStr
 
-# Импорт твоей ML-функции
+# Импорт ML-функции
 from ml.forecast import forecast_ticker
 
 
@@ -44,8 +43,6 @@ class PredictionRecord(BaseModel):
     predicted_price: float
     created_at: str
 
-
-# ---- Приложение ----
 
 class UserRegister(BaseModel):
     email: str
@@ -80,12 +77,14 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
+
+# ---- Приложение ----
+
 app = FastAPI(
     title="PredictForFSt API",
     description="Сервис предсказания курсов валют и ресурсов",
     version="0.1.0",
 )
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,7 +93,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # Временное хранилище прогнозов
 predictions_db: list[dict] = []
@@ -121,13 +119,13 @@ def get_symbols():
 
 @app.post("/api/forecast")
 def post_forecast(req: ForecastRequest):
-    """Получить прогноз от ML-модели."""
+    """Получить прогноз от ML-модели (без авторизации)."""
     try:
         result = forecast_ticker(ticker=req.ticker, horizon_days=req.horizon)
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
 
 # ---- Авторизация ----
 
@@ -136,7 +134,7 @@ def register(user: UserRegister):
     """Регистрация нового пользователя."""
     if user.username in fake_users_db:
         raise HTTPException(status_code=409, detail="Пользователь уже существует")
-    
+
     fake_users_db[user.username] = {
         "username": user.username,
         "email": user.email,
@@ -151,7 +149,7 @@ def login(user: UserLogin):
     db_user = fake_users_db.get(user.username)
     if not db_user or not verify_password(user.password, db_user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
-    
+
     token = create_access_token(data={"sub": user.username})
     return {"access_token": token, "token_type": "bearer"}
 
@@ -162,20 +160,23 @@ def get_me(current_user: dict = Depends(get_current_user)):
     return {"username": current_user["username"], "email": current_user["email"]}
 
 
-# ---- CRUD для сохранения прогнозов ----
+# ---- CRUD для сохранения прогнозов (защищённые) ----
 
 @app.post("/predictions", status_code=201)
-def create_prediction(req: ForecastRequest):
-    """Сохранить прогноз в избранное."""
+def create_prediction(
+    req: ForecastRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Сохранить прогноз в избранное (только для авторизованных)."""
     global next_id
     try:
         result = forecast_ticker(ticker=req.ticker, horizon_days=req.horizon)
-        # Сохраняем только последнюю предсказанную цену
         last_price = result["forecast"]["prices"][-1]
         last_date = result["forecast"]["dates"][-1]
 
         record = {
             "id": next_id,
+            "username": current_user["username"],
             "ticker": req.ticker,
             "date": last_date,
             "predicted_price": last_price,
@@ -189,25 +190,35 @@ def create_prediction(req: ForecastRequest):
 
 
 @app.get("/predictions", response_model=list[PredictionRecord])
-def get_predictions():
-    """Получить все сохранённые прогнозы."""
-    return predictions_db
+def get_predictions(current_user: dict = Depends(get_current_user)):
+    """Получить прогнозы текущего пользователя."""
+    return [p for p in predictions_db if p["username"] == current_user["username"]]
 
 
 @app.get("/predictions/{prediction_id}", response_model=PredictionRecord)
-def get_prediction(prediction_id: int):
-    """Получить прогноз по ID."""
+def get_prediction(
+    prediction_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Получить прогноз по ID (только свой)."""
     for record in predictions_db:
         if record["id"] == prediction_id:
+            if record["username"] != current_user["username"]:
+                raise HTTPException(status_code=403, detail="Доступ запрещён")
             return record
     raise HTTPException(status_code=404, detail="Прогноз не найден")
 
 
 @app.delete("/predictions/{prediction_id}")
-def delete_prediction(prediction_id: int):
-    """Удалить прогноз по ID."""
+def delete_prediction(
+    prediction_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Удалить прогноз по ID (только свой)."""
     for i, record in enumerate(predictions_db):
         if record["id"] == prediction_id:
+            if record["username"] != current_user["username"]:
+                raise HTTPException(status_code=403, detail="Доступ запрещён")
             del predictions_db[i]
             return {"message": f"Прогноз {prediction_id} удалён"}
     raise HTTPException(status_code=404, detail="Прогноз не найден")
