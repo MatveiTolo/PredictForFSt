@@ -1,3 +1,4 @@
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, field_validator
 from datetime import datetime
@@ -84,6 +85,16 @@ app = FastAPI(
     description="Сервис предсказания курсов валют и ресурсов",
     version="0.1.0",
 )
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Временное хранилище прогнозов
 predictions_db: list[dict] = []
