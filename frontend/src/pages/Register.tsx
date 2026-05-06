@@ -1,81 +1,57 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Form, Input, Button, Card, Typography, Alert } from "antd";
+import { UserOutlined, LockOutlined, MailOutlined } from "@ant-design/icons";
 
 function Register() {
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onFinish = async (values: { email: string; username: string; password: string }) => {
+    setLoading(true);
     setError("");
-
     try {
       const response = await fetch("http://127.0.0.1:8000/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, username, password }),
+        body: JSON.stringify(values),
       });
-
       const data = await response.json();
-
       if (!response.ok) {
-        // data.detail может быть строкой или массивом (ошибки валидации)
-        if (typeof data.detail === "string") {
-          throw new Error(data.detail);
-        } else if (Array.isArray(data.detail)) {
-          throw new Error(data.detail.map((e: any) => e.msg).join(", "));
-        } else {
-          throw new Error("Ошибка регистрации");
-        }
+        throw new Error(typeof data.detail === "string" ? data.detail : "Ошибка регистрации");
       }
-
       navigate("/login");
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div>
-      <h2>Регистрация</h2>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Email:</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label>Логин:</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label>Пароль:</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        <button type="submit">Зарегистрироваться</button>
-      </form>
-      <p>
+    <Card title="Регистрация" style={{ maxWidth: 400, margin: "40px auto" }}>
+      {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />}
+      <Form onFinish={onFinish} layout="vertical">
+        <Form.Item name="email" rules={[{ required: true, type: "email", message: "Введите корректный email" }]}>
+          <Input prefix={<MailOutlined />} placeholder="Email" size="large" />
+        </Form.Item>
+        <Form.Item name="username" rules={[{ required: true, min: 3, message: "Минимум 3 символа" }]}>
+          <Input prefix={<UserOutlined />} placeholder="Логин" size="large" />
+        </Form.Item>
+        <Form.Item name="password" rules={[{ required: true, min: 4, message: "Минимум 4 символа" }]}>
+          <Input.Password prefix={<LockOutlined />} placeholder="Пароль" size="large" />
+        </Form.Item>
+        <Form.Item>
+          <Button type="primary" htmlType="submit" loading={loading} block size="large">
+            Зарегистрироваться
+          </Button>
+        </Form.Item>
+      </Form>
+      <Typography.Text>
         Уже есть аккаунт? <Link to="/login">Войти</Link>
-      </p>
-    </div>
+      </Typography.Text>
+    </Card>
   );
 }
 

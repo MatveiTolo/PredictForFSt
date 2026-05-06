@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { Card, Button, Select, Space, Spin, Alert, Row, Col, Typography, Tag } from "antd";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const SYMBOLS = [
-  { value: "USDRUB=X", label: "USD/RUB 🇺🇸" },
-  { value: "GC=F", label: "Золото 🥇" },
-  { value: "BZ=F", label: "Нефть Brent 🛢️" },
+  { value: "USDRUB=X", label: "🇺🇸 USD/RUB" },
+  { value: "GC=F", label: "🥇 Золото" },
+  { value: "BZ=F", label: "🛢️ Нефть Brent" },
 ];
 
 function Home() {
@@ -23,9 +25,7 @@ function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker: selectedTicker, horizon }),
       });
-      if (!response.ok) {
-        throw new Error("Ошибка получения прогноза");
-      }
+      if (!response.ok) throw new Error("Ошибка получения прогноза");
       const result = await response.json();
       setData(result);
     } catch (err: any) {
@@ -35,104 +35,109 @@ function Home() {
     }
   };
 
+  // Подготовка данных для графика
+  const chartData = data
+    ? [
+        ...data.history.dates.map((d: string, i: number) => ({
+          date: d,
+          цена: data.history.prices[i],
+          тип: "История",
+        })),
+        ...data.forecast.dates.map((d: string, i: number) => ({
+          date: d,
+          цена: data.forecast.prices[i],
+          тип: "Прогноз",
+        })),
+      ]
+    : [];
+
   return (
     <div>
-      <h2>Текущие курсы и прогноз</h2>
+      <Typography.Title level={2}>Прогноз курса валют</Typography.Title>
 
-      <div style={{ margin: "10px 0" }}>
-        {SYMBOLS.map((s) => (
-          <button
-            key={s.value}
-            onClick={() => setSelectedTicker(s.value)}
-            style={{
-              margin: "0 5px",
-              padding: "8px 16px",
-              background: selectedTicker === s.value ? "#4CAF50" : "#ddd",
-              color: selectedTicker === s.value ? "white" : "black",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      <Card style={{ marginBottom: 20 }}>
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <div>
+            <Typography.Text strong>Выберите валюту:</Typography.Text>
+            <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
+              {SYMBOLS.map((s) => (
+                <Col key={s.value}>
+                  <Button
+                    type={selectedTicker === s.value ? "primary" : "default"}
+                    onClick={() => setSelectedTicker(s.value)}
+                  >
+                    {s.label}
+                  </Button>
+                </Col>
+              ))}
+            </Row>
+          </div>
 
-      <div style={{ margin: "10px 0" }}>
-        <label>Горизонт прогноза (дней): </label>
-        <select value={horizon} onChange={(e) => setHorizon(Number(e.target.value))}>
-          <option value="3">3</option>
-          <option value="7">7</option>
-          <option value="14">14</option>
-          <option value="30">30</option>
-        </select>
-      </div>
+          <Space>
+            <Typography.Text strong>Горизонт прогноза:</Typography.Text>
+            <Select value={horizon} onChange={setHorizon} style={{ width: 100 }}>
+              <Select.Option value={3}>3 дня</Select.Option>
+              <Select.Option value={7}>7 дней</Select.Option>
+              <Select.Option value={14}>14 дней</Select.Option>
+              <Select.Option value={30}>30 дней</Select.Option>
+            </Select>
+          </Space>
 
-      <button onClick={fetchForecast} disabled={loading} style={{ padding: "10px 20px", cursor: "pointer" }}>
-        {loading ? "Загрузка..." : "Получить прогноз"}
-      </button>
+          <Button type="primary" size="large" onClick={fetchForecast} disabled={loading}>
+            {loading ? <Spin size="small" /> : "Получить прогноз"}
+          </Button>
+        </Space>
+      </Card>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 20 }} />}
 
       {data && (
-        <div style={{ marginTop: "20px" }}>
-          <h3>Прогноз для {data.ticker}</h3>
-          <p>
-            Текущая цена: ~{data.history?.prices?.slice(-1)[0]?.toFixed(2) || "—"}
-          </p>
-          <p>
-            Прогноз на {horizon} дн.: ~{data.forecast?.prices?.slice(-1)[0]?.toFixed(2) || "—"}
-          </p>
+        <Card title={`Прогноз для ${data.ticker}`}>
+          <Row gutter={16} style={{ marginBottom: 20 }}>
+            <Col>
+              <Card size="small">
+                <Typography.Text type="secondary">Текущая цена</Typography.Text>
+                <Typography.Title level={3} style={{ margin: 0 }}>
+                  {data.history?.prices?.slice(-1)[0]?.toFixed(2)} ₽
+                </Typography.Title>
+              </Card>
+            </Col>
+            <Col>
+              <Card size="small">
+                <Typography.Text type="secondary">Прогноз через {horizon} дн.</Typography.Text>
+                <Typography.Title level={3} style={{ margin: 0 }}>
+                  {data.forecast?.prices?.slice(-1)[0]?.toFixed(2)} ₽
+                  <Tag
+                    color={
+                      data.forecast.prices.slice(-1)[0] > data.history.prices.slice(-1)[0]
+                        ? "green"
+                        : "red"
+                    }
+                    style={{ marginLeft: 8 }}
+                  >
+                    {data.forecast.prices.slice(-1)[0] > data.history.prices.slice(-1)[0]
+                      ? "↑ Рост"
+                      : "↓ Падение"}
+                  </Tag>
+                </Typography.Title>
+              </Card>
+            </Col>
+          </Row>
 
-          {/* Простая текстовая визуализация графика */}
-          <div style={{
-            fontFamily: "monospace",
-            background: "#f5f5f5",
-            padding: "10px",
-            borderRadius: "4px",
-            whiteSpace: "pre",
-            overflowX: "auto",
-          }}>
-            {renderSimpleChart(data)}
-          </div>
-        </div>
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="цена" stroke="#1890ff" dot={false} name="Цена" />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
       )}
     </div>
   );
-}
-
-function renderSimpleChart(data: any): string {
-  if (!data?.history?.prices || !data?.forecast?.prices) return "Нет данных";
-
-  const allPrices = [...data.history.prices, ...data.forecast.prices];
-  const max = Math.max(...allPrices);
-  const min = Math.min(...allPrices);
-  const range = max - min || 1;
-  const height = 10;
-
-  const normalize = (v: number) => Math.round(((v - min) / range) * height);
-
-  const historyPart = data.history.prices.map((p: number) => normalize(p));
-  const forecastPart = data.forecast.prices.map((p: number) => normalize(p));
-
-  let chart = "";
-  for (let row = height; row >= 0; row--) {
-    let line = "";
-    for (const h of historyPart) {
-      line += h >= row ? "█" : " ";
-    }
-    line += " │ ";
-    for (const f of forecastPart) {
-      line += f >= row ? "▓" : " ";
-    }
-    chart += line + "\n";
-  }
-
-  chart += "─".repeat(historyPart.length) + "─┼─" + "─".repeat(forecastPart.length) + "\n";
-  chart += "История".padEnd(historyPart.length) + "   " + "Прогноз\n";
-
-  return chart;
 }
 
 export default Home;

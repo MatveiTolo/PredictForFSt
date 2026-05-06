@@ -1,71 +1,57 @@
-import { useAuth } from "../context/AuthContext";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Form, Input, Button, Card, Typography, Alert } from "antd";
+import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { useAuth } from "../context/AuthContext";
 
 function Login() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();  // ← перенесли сюда, на верхний уровень
+  const { login } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onFinish = async (values: { username: string; password: string }) => {
+    setLoading(true);
     setError("");
-
     try {
       const response = await fetch("http://127.0.0.1:8000/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(values),
       });
-
       const data = await response.json();
-
       if (!response.ok) {
-        if (typeof data.detail === "string") {
-          throw new Error(data.detail);
-        } else {
-          throw new Error("Ошибка входа");
-        }
+        throw new Error(data.detail || "Ошибка входа");
       }
-
-      login(data.access_token);  // ← просто вызываем, без useAuth()
+      login(data.access_token);
       navigate("/");
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div>
-      <h2>Вход в систему</h2>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Логин:</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label>Пароль:</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        <button type="submit">Войти</button>
-      </form>
-      <p>
+    <Card title="Вход в систему" style={{ maxWidth: 400, margin: "40px auto" }}>
+      {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />}
+      <Form onFinish={onFinish} layout="vertical">
+        <Form.Item name="username" rules={[{ required: true, message: "Введите логин" }]}>
+          <Input prefix={<UserOutlined />} placeholder="Логин" size="large" />
+        </Form.Item>
+        <Form.Item name="password" rules={[{ required: true, message: "Введите пароль" }]}>
+          <Input.Password prefix={<LockOutlined />} placeholder="Пароль" size="large" />
+        </Form.Item>
+        <Form.Item>
+          <Button type="primary" htmlType="submit" loading={loading} block size="large">
+            Войти
+          </Button>
+        </Form.Item>
+      </Form>
+      <Typography.Text>
         Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
-      </p>
-    </div>
+      </Typography.Text>
+    </Card>
   );
 }
 
