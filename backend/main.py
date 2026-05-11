@@ -8,7 +8,9 @@ from auth import (
     get_password_hash,
     create_access_token,
     get_current_user,
+    require_role,
 )
+from models import UserRole
 
 # Импорт ML-функции
 from ml.forecast import forecast_ticker
@@ -83,7 +85,7 @@ class UserLogin(BaseModel):
 app = FastAPI(
     title="PredictForFSt API",
     description="Сервис предсказания курсов валют и ресурсов",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(
@@ -97,6 +99,18 @@ app.add_middleware(
 # Временное хранилище прогнозов
 predictions_db: list[dict] = []
 next_id: int = 1
+
+
+# ---- Автоматическое создание admin при запуске ----
+
+if "admin" not in fake_users_db:
+    fake_users_db["admin"] = {
+        "username": "admin",
+        "email": "admin@admin.com",
+        "hashed_password": get_password_hash("admin123"),
+        "role": UserRole.ADMIN,
+    }
+    print("*** Admin пользователь создан (admin / admin123) ***")
 
 
 # ---- Эндпоинты ----
@@ -139,6 +153,7 @@ def register(user: UserRegister):
         "username": user.username,
         "email": user.email,
         "hashed_password": get_password_hash(user.password),
+        "role": UserRole.USER,
     }
     return {"message": "Пользователь создан", "username": user.username}
 
@@ -150,14 +165,49 @@ def login(user: UserLogin):
     if not db_user or not verify_password(user.password, db_user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
 
-    token = create_access_token(data={"sub": user.username})
+    token = create_access_token(data={
+        "sub": user.username,
+        "role": db_user.get("role", UserRole.USER).value,
+    })
     return {"access_token": token, "token_type": "bearer"}
 
 
 @app.get("/auth/me")
 def get_me(current_user: dict = Depends(get_current_user)):
     """Информация о текущем пользователе."""
-    return {"username": current_user["username"], "email": current_user["email"]}
+    return {
+        "username": current_user["username"],
+        "email": current_user["email"],
+        "role": current_user.get("role", UserRole.USER).value,
+    }
+
+
+# ---- Администрирование (только для admin) ----
+
+@app.get("/admin/users")
+def get_all_users(current_user: dict = Depends(require_role(UserRole.ADMIN))):
+    """Получить список всех пользователей (только admin)."""
+    return [
+        {
+            "username": u["username"],
+            "email": u["email"],
+            "role": u.get("role", UserRole.USER).value,
+        }
+        for u in fake_users_db.values()
+    ]
+
+
+@app.put("/admin/users/{username}/role")
+def set_user_role(
+    username: str,
+    role: UserRole,
+    current_user: dict = Depends(require_role(UserRole.ADMIN)),
+):
+    """Изменить роль пользователя (только admin)."""
+    if username not in fake_users_db:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    fake_users_db[username]["role"] = role
+    return {"message": f"Роль пользователя {username} изменена на {role.value}"}
 
 
 # ---- CRUD для сохранения прогнозов (защищённые) ----
@@ -191,7 +241,9 @@ def create_prediction(
 
 @app.get("/predictions", response_model=list[PredictionRecord])
 def get_predictions(current_user: dict = Depends(get_current_user)):
-    """Получить прогнозы текущего пользователя."""
+    """Получить прогнозы текущего пользователя (admin видит все)."""
+    if current_user.get("role") == UserRole.ADMIN:
+        return predictions_db
     return [p for p in predictions_db if p["username"] == current_user["username"]]
 
 
@@ -200,10 +252,10 @@ def get_prediction(
     prediction_id: int,
     current_user: dict = Depends(get_current_user),
 ):
-    """Получить прогноз по ID (только свой)."""
+    """Получить прогноз по ID (свой или admin)."""
     for record in predictions_db:
         if record["id"] == prediction_id:
-            if record["username"] != current_user["username"]:
+            if record["username"] != current_user["username"] and current_user.get("role") != UserRole.ADMIN:
                 raise HTTPException(status_code=403, detail="Доступ запрещён")
             return record
     raise HTTPException(status_code=404, detail="Прогноз не найден")
@@ -214,10 +266,10 @@ def delete_prediction(
     prediction_id: int,
     current_user: dict = Depends(get_current_user),
 ):
-    """Удалить прогноз по ID (только свой)."""
+    """Удалить прогноз по ID (свой или admin)."""
     for i, record in enumerate(predictions_db):
         if record["id"] == prediction_id:
-            if record["username"] != current_user["username"]:
+            if record["username"] != current_user["username"] and current_user.get("role") != UserRole.ADMIN:
                 raise HTTPException(status_code=403, detail="Доступ запрещён")
             del predictions_db[i]
             return {"message": f"Прогноз {prediction_id} удалён"}
