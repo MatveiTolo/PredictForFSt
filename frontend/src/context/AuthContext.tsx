@@ -1,8 +1,10 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
+
 interface AuthContextType {
   token: string | null;
   username: string | null;
+  role: string | null;
   login: (token: string) => void;
   logout: () => void;
 }
@@ -10,6 +12,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   token: null,
   username: null,
+  role: null,
   login: () => {},
   logout: () => {},
 });
@@ -17,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(localStorage.getItem("access_token"));
   const [username, setUsername] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     if (token) {
@@ -25,7 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
         .then((res) => res.json())
         .then((data) => {
-          if (data.username) setUsername(data.username);
+          if (data.username) {
+            setUsername(data.username);
+            setRole(data.role || "user");
+          }
         })
         .catch(() => logout());
     }
@@ -40,10 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("access_token");
     setToken(null);
     setUsername(null);
+    setRole(null);
   };
 
   return (
-    <AuthContext.Provider value={{ token, username, login, logout }}>
+    <AuthContext.Provider value={{ token, username, role, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

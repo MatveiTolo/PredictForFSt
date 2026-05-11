@@ -1,22 +1,36 @@
-import { BrowserRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
-import { Layout, Menu, Button, Typography, Space } from "antd";
-import { HomeOutlined, LoginOutlined, UserAddOutlined, StarOutlined, LogoutOutlined, UserOutlined } from "@ant-design/icons";
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { Layout, Menu, Button, Typography, Space, Tag } from "antd";
+import {
+  HomeOutlined,
+  LoginOutlined,
+  UserAddOutlined,
+  StarOutlined,
+  LogoutOutlined,
+  UserOutlined,
+  CrownOutlined,
+  TeamOutlined,
+} from "@ant-design/icons";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Favorites from "./pages/Favorites";
+import Admin from "./pages/Admin";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 const { Header, Content } = Layout;
 
 function NavBar() {
-  const { token, username, logout } = useAuth();
-  const navigate = useNavigate();
+  const { token, username, role, logout } = useAuth();
+
+  const isAdmin = role === "admin";
 
   const menuItems = token
     ? [
         { key: "/", icon: <HomeOutlined />, label: <Link to="/">Главная</Link> },
         { key: "/favorites", icon: <StarOutlined />, label: <Link to="/favorites">Избранное</Link> },
+        ...(isAdmin
+          ? [{ key: "/admin", icon: <TeamOutlined />, label: <Link to="/admin">Админ</Link> }]
+          : []),
       ]
     : [
         { key: "/", icon: <HomeOutlined />, label: <Link to="/">Главная</Link> },
@@ -40,7 +54,17 @@ function NavBar() {
           <Space style={{ color: "white" }}>
             <UserOutlined />
             <span>{username}</span>
-            <Button type="link" icon={<LogoutOutlined />} onClick={logout} style={{ color: "white" }}>
+            {isAdmin && (
+              <Tag color="gold" icon={<CrownOutlined />}>
+                admin
+              </Tag>
+            )}
+            <Button
+              type="link"
+              icon={<LogoutOutlined />}
+              onClick={logout}
+              style={{ color: "white" }}
+            >
               Выйти
             </Button>
           </Space>
@@ -62,6 +86,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/favorites" element={<Favorites />} />
+              <Route path="/admin" element={<Admin />} />
             </Routes>
           </Content>
         </Layout>
