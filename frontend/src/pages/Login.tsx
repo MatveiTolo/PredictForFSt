@@ -4,6 +4,8 @@ import { Form, Input, Button, Card, Typography, Alert } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { useAuth } from "../context/AuthContext";
 
+const API_URL = "http://127.0.0.1:8000";
+
 function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -14,7 +16,7 @@ function Login() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("http://127.0.0.1:8000/auth/login", {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
@@ -23,7 +25,8 @@ function Login() {
       if (!response.ok) {
         throw new Error(data.detail || "Ошибка входа");
       }
-      login(data.access_token);
+      // Теперь принимаем оба токена
+      login(data.access_token, data.refresh_token);
       navigate("/");
     } catch (err: any) {
       setError(err.message);

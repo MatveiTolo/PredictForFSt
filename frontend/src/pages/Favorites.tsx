@@ -3,6 +3,8 @@ import { useAuth } from "../context/AuthContext";
 import { Card, List, Button, Typography, Alert, Spin, Tag, Popconfirm } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
 
+const API_URL = "http://127.0.0.1:8000";
+
 interface Prediction {
   id: number;
   ticker: string;
@@ -21,7 +23,7 @@ function Favorites() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("http://127.0.0.1:8000/predictions", {
+      const response = await fetch(`${API_URL}/predictions`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error("Ошибка загрузки");
@@ -40,7 +42,7 @@ function Favorites() {
 
   const deletePrediction = async (id: number) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/predictions/${id}`, {
+      const response = await fetch(`${API_URL}/predictions/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -82,8 +84,7 @@ function Favorites() {
                 <Card.Meta
                   title={
                     <span>
-                      {p.ticker}{" "}
-                      <Tag color="blue">{p.predicted_price.toFixed(2)} ₽</Tag>
+                      {p.ticker} <Tag color="blue">{p.predicted_price.toFixed(2)} ₽</Tag>
                     </span>
                   }
                   description={`Дата прогноза: ${p.date} | Создан: ${new Date(p.created_at).toLocaleString()}`}
